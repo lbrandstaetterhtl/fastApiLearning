@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>repos --list</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #0b0e14;
+    --panel: #11151d;
+    --line: #1e2430;
+    --line-strong: #2a3241;
+    --text: #cdd6e4;
+    --text-dim: #6b7688;
+    --amber: #e8a33d;
+    --amber-dim: #7a5a26;
+    --cyan: #5fb3b3;
+    --red: #d9736a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 14px;
+    padding: 32px 24px 64px;
+  }
+
+  .wrap { max-width: 860px; margin: 0 auto; }
+
+  .prompt-line {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .prompt-line .path { color: var(--cyan); }
+  .prompt-line .cmd { color: var(--amber); }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 4px 0 20px;
+    color: var(--text);
+  }
+  .cursor {
+    display: inline-block;
+    width: 9px;
+    height: 18px;
+    background: var(--amber);
+    margin-left: 4px;
+    vertical-align: -3px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  input, select {
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 3px;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--amber-dim);
+  }
+  input { flex: 1; min-width: 160px; }
+  input::placeholder { color: var(--text-dim); }
+
+  .meta-line {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+  .meta-line .n { color: var(--amber); }
+
+  .row {
+    display: grid;
+    grid-template-columns: 20px 1fr auto auto auto;
+    gap: 14px;
+    align-items: baseline;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--line);
+    transition: background 0.1s;
+  }
+  .row:hover { background: var(--panel); }
+
+  .row .flag { color: var(--text-dim); }
+  .row .name {
+    color: var(--text);
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .row .name:hover { color: var(--amber); text-decoration: underline; }
+  .row .desc {
+    grid-column: 1 / -1;
+    color: var(--text-dim);
+    font-size: 12.5px;
+    margin: -6px 0 4px 34px;
+  }
+  .row .lang { color: var(--cyan); font-size: 12px; white-space: nowrap; }
+  .row .stars { color: var(--amber); font-size: 12px; white-space: nowrap; }
+  .row .updated { color: var(--text-dim); font-size: 11.5px; white-space: nowrap; }
+
+  .state {
+    color: var(--text-dim);
+    padding: 20px 4px;
+    font-size: 13px;
+  }
+  .state.error { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="prompt-line"><span class="path">leon@github</span>:~$ <span class="cmd">ls -la --repos --sort=updated</span></div>
+  <h1>repos<span class="cursor"></span></h1>
+
+  <div class="controls">
+    <input id="filterInput" type="text" placeholder="filter --name oder --language...">
+    <select id="sortSelect">
+      <option value="updated">--sort updated</option>
+      <option value="stars">--sort stars</option>
+      <option value="name">--sort name</option>
+    </select>
+  </div>
+
+  <div class="meta-line" id="metaLine">lädt...</div>
+  <div id="list"></div>
+
+</div>
+
+<script>
+  const API_URL = "http://127.0.0.1:8000/repos";
+
+  let allRepos = [];
+
+  const listEl = document.getElementById("list");
+  const metaEl = document.getElementById("metaLine");
+  const filterEl = document.getElementById("filterInput");
+  const sortEl = document.getElementById("sortSelect");
+
+  function timeAgo(dateStr) {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const days = Math.floor(diffMs / 86400000);
+    if (days < 1) return "today";
+    if (days === 1) return "yesterday";
+    if (days < 30) return days + "d ago";
+    const months = Math.floor(days / 30);
+    if (months < 12) return months + "mo ago";
+    return Math.floor(months / 12) + "y ago";
+  }
+
+  function render(repos) {
+    if (repos.length === 0) {
+      listEl.innerHTML = '<div class="state">keine repos gefunden.</div>';
+      return;
+    }
+    listEl.innerHTML = repos.map(r => `
+      <div class="row">
+        <span class="flag">-</span>
+        <a class="name" href="${r.url}" target="_blank" rel="noopener">${r.name}</a>
+        <span class="lang">${r.language ? r.language : "--"}</span>
+        <span class="stars">★ ${r.stars}</span>
+        <span class="updated">${timeAgo(r.updated_at)}</span>
+        ${r.description ? `<span class="desc"># ${r.description}</span>` : ""}
+      </div>
+    `).join("");
+  }
+
+  function applyFiltersAndSort() {
+    const query = filterEl.value.toLowerCase().trim();
+    const sortBy = sortEl.value;
+
+    let filtered = allRepos.filter(r => {
+      const haystack = (r.name + " " + (r.language || "") + " " + (r.description || "")).toLowerCase();
+      return haystack.includes(query);
+    });
+
+    filtered.sort((a, b) => {
+      if (sortBy === "stars") return b.stars - a.stars;
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      return new Date(b.updated_at) - new Date(a.updated_at);
+    });
+
+    metaEl.innerHTML = `<span class="n">${filtered.length}</span> von ${allRepos.length} repos`;
+    render(filtered);
+  }
+
+  async function loadRepos() {
+    try {
+      const response = await fetch(API_URL);
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      allRepos = await response.json();
+      applyFiltersAndSort();
+    } catch (err) {
+      metaEl.textContent = "";
+      listEl.innerHTML = `<div class="state error">fehler: backend nicht erreichbar (${err.message}). läuft uvicorn auf Port 8000?</div>`;
+    }
+  }
+
+  filterEl.addEventListener("input", applyFiltersAndSort);
+  sortEl.addEventListener("change", applyFiltersAndSort);
+
+  loadRepos();
+</script>
+</body>
+</html>
