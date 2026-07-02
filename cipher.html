@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>cipher --tool</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #0b0e14;
+    --panel: #11151d;
+    --line: #1e2430;
+    --line-strong: #2a3241;
+    --text: #cdd6e4;
+    --text-dim: #6b7688;
+    --amber: #e8a33d;
+    --cyan: #5fb3b3;
+    --red: #d9736a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 14px;
+    padding: 32px 24px 64px;
+  }
+
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  .prompt-line { color: var(--text-dim); font-size: 13px; margin-bottom: 4px; }
+  .prompt-line .cmd { color: var(--amber); }
+
+  h1 { font-size: 20px; margin: 4px 0 24px; }
+
+  label {
+    display: block;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin: 16px 0 6px;
+    text-transform: lowercase;
+  }
+
+  textarea, input, select {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 10px;
+    border-radius: 3px;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--amber); }
+
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .tab.active { color: var(--amber); border-color: var(--amber); }
+
+  .key-field { display: none; }
+  .key-field.visible { display: block; }
+  .shift-field { display: none; }
+  .shift-field.visible { display: block; }
+
+  button {
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    background: var(--amber);
+    color: #14161c;
+    border: none;
+    border-radius: 3px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  .output {
+    margin-top: 20px;
+    padding: 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    min-height: 40px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .output.error { color: var(--red); border-color: var(--red); }
+  .output.empty { color: var(--text-dim); }
+
+  .mode-toggle { display: flex; gap: 8px; margin-top: 4px; }
+  .mode-toggle label {
+    flex: 1;
+    text-align: center;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    cursor: pointer;
+    margin: 0;
+    color: var(--text-dim);
+  }
+  .mode-toggle input[type="radio"] { display: none; }
+  .mode-toggle input[type="radio"]:checked + label { color: var(--cyan); border-color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="prompt-line">leon@cipher:~$ <span class="cmd">./run --tool</span></div>
+  <h1>cipher-tool</h1>
+
+  <div class="tabs">
+    <div class="tab active" data-cipher="caeser">caesar</div>
+    <div class="tab" data-cipher="vigenere">vigenere</div>
+    <div class="tab" data-cipher="xor">xor</div>
+  </div>
+
+  <label>modus</label>
+  <div class="mode-toggle">
+    <input type="radio" name="mode" id="mode-encrypt" value="encrypt" checked>
+    <label for="mode-encrypt">encrypt</label>
+    <input type="radio" name="mode" id="mode-decrypt" value="decrypt">
+    <label for="mode-decrypt">decrypt</label>
+  </div>
+
+  <label>text</label>
+  <textarea id="textInput" placeholder="text hier eingeben..."></textarea>
+
+  <div class="shift-field visible" id="shiftField">
+    <label>shift</label>
+    <input type="number" id="shiftInput" value="3" min="0" max="25">
+  </div>
+
+  <div class="key-field" id="keyField">
+    <label>key</label>
+    <input type="text" id="keyInput" placeholder="z.B. KEY">
+  </div>
+
+  <button id="runBtn">ausführen</button>
+
+  <label>ergebnis</label>
+  <div class="output empty" id="output">-- noch nichts ausgeführt --</div>
+
+</div>
+
+<script>
+  // Passe das ggf. an deine tatsächliche Server-URL an
+  const BASE_URL = "http://127.0.0.1:8000";
+
+  let currentCipher = "caeser";
+
+  const tabs = document.querySelectorAll(".tab");
+  const shiftField = document.getElementById("shiftField");
+  const keyField = document.getElementById("keyField");
+  const output = document.getElementById("output");
+  const runBtn = document.getElementById("runBtn");
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      currentCipher = tab.dataset.cipher;
+
+      if (currentCipher === "caeser") {
+        shiftField.classList.add("visible");
+        keyField.classList.remove("visible");
+      } else {
+        shiftField.classList.remove("visible");
+        keyField.classList.add("visible");
+      }
+    });
+  });
+
+  async function ausfuehren() {
+    const text = document.getElementById("textInput").value;
+    const mode = document.querySelector('input[name="mode"]:checked').value; // "encrypt" oder "decrypt"
+
+    if (!text.trim()) {
+      output.textContent = "bitte erst text eingeben.";
+      output.className = "output error";
+      return;
+    }
+
+    // Body je nach Cipher-Typ zusammenbauen
+    let body;
+    if (currentCipher === "caeser") {
+      const shift = parseInt(document.getElementById("shiftInput").value, 10);
+      body = { text: text, shift: shift };
+    } else if (currentCipher === "vigenere" || currentCipher === "xor") {
+      const key = document.getElementById("keyInput").value;
+      if (!key.trim()) {
+        output.textContent = "bitte einen key eingeben.";
+        output.className = "output error";
+        return;
+      }
+      body = { text: text, key: key };
+    }
+
+    const url = `${BASE_URL}/${currentCipher}/${mode}`;
+
+    runBtn.disabled = true;
+    output.textContent = "lädt...";
+    output.className = "output empty";
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const daten = await response.json();
+
+      // Backend gibt evtl. { "text": "...", "req": {...} } zurück (siehe CeaserResp) —
+      // hier wird nur das text-Feld angezeigt. Falls dein Backend anders strukturiert ist,
+      // diese Zeile anpassen.
+      output.textContent = daten.text;
+      output.className = "output";
+
+    } catch (err) {
+      output.textContent = `fehler: ${err.message} — backend erreichbar? url korrekt? (${url})`;
+      output.className = "output error";
+    } finally {
+      runBtn.disabled = false;
+    }
+  }
+
+  runBtn.addEventListener("click", ausfuehren);
+</script>
+</body>
+</html>

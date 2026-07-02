@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 from fastapi.middleware.cors import CORSMiddleware
+import encrypt
 import decrypt
 
 class Town(BaseModel):
@@ -28,6 +29,14 @@ class VigenereReq(BaseModel):
 class VigenereResp(BaseModel):
     text: str
     req: VigenereReq
+
+class XorReq(BaseModel):
+    text: str
+    key: str
+
+class XorResp(BaseModel):
+    text: str
+    req: XorReq
 
 app = FastAPI()
 
@@ -102,7 +111,7 @@ async def get_repos():
         for repo in data
     ]
 
-@app.post("/ceaser/decrypt")
+@app.post("/caeser/decrypt")
 async def handle_ceaser_decrypt(req: CeaserReq):
 
     result = decrypt.ceaser(req.text, req.shift)
@@ -119,6 +128,39 @@ async def handle_vigenere_decrypt(req: VigenereReq):
     result = decrypt.vigenere(req.text, req.key)
 
     resp = VigenereResp(
+        text=result,
+        req=req
+    )
+
+    return resp
+
+@app.post("/caeser/encrypt")
+async def handle_ceaser_encrypt(req: CeaserReq):
+    result = encrypt.ceaser(req.text, req.shift)
+
+    resp = CeaserResp(
+        text=result,
+        req=req
+    )
+
+    return resp
+
+@app.post("/vigenere/encrypt")
+async def handle_vigenere_encrypt(req: VigenereReq):
+    result = encrypt.vigenere(req.text, req.key)
+
+    resp = VigenereResp(
+        text=result,
+        req=req
+    )
+
+    return resp
+
+@app.post("/xor/encrypt")
+async def handle_xor_encrypt(req: XorReq):
+    result = encrypt.xor(req.text, req.key)
+
+    resp = XorResp(
         text=result,
         req=req
     )
