@@ -1,3 +1,5 @@
+from unittest import result
+
 import encrypt
 def ceaser(text: str, shift: int) -> str:
     result = ""
@@ -32,4 +34,12 @@ def vigenere(text: str, key: str) -> str:
     return result
 
 def xor(text: str, key: str) -> str:
-    return encrypt.xor(text, key).decode('utf-8', errors='ignore')
+    text_bytes = bytes.fromhex(text)
+    key_bytes = key.encode('utf-8')
+   
+    result = bytearray()
+
+    for i in range(len(text_bytes)):
+        result.append(text_bytes[i] ^ key_bytes[i % len(key_bytes)])
+
+    return result.decode('utf-8', errors='ignore')

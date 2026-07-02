@@ -237,11 +237,16 @@
 
       const daten = await response.json();
 
-      // Backend gibt evtl. { "text": "...", "req": {...} } zurück (siehe CeaserResp) —
-      // hier wird nur das text-Feld angezeigt. Falls dein Backend anders strukturiert ist,
-      // diese Zeile anpassen.
-      output.textContent = daten.text;
-      output.className = "output";
+      // Backend gibt { "text": "...", "req": {...} } zurück
+      const result = daten.text;
+      output.textContent = result;
+
+      // Prüfe, ob das Ergebnis ein Error-Message ist (fängt mit "fehler:")
+      if (result.toLowerCase().startsWith("fehler:")) {
+        output.className = "output error";
+      } else {
+        output.className = "output";
+      }
 
     } catch (err) {
       output.textContent = `fehler: ${err.message} — backend erreichbar? url korrekt? (${url})`;

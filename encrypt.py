@@ -1,33 +1,40 @@
-import decrypt
 def ceaser(text: str, shift: int) -> str:
-    result = ""
-    for char in text:
-        if char.isalpha():
-            basis = ord('A') if char.isupper() else ord('a')
-            result += chr((ord(char) - basis + shift) % 26 + basis)  # + shift!
-        else:
-            result += char
-    return result
+    try:
+        result = ""
+        for char in text:
+            if char.isalpha():
+                basis = ord('A') if char.isupper() else ord('a')
+                result += chr((ord(char) - basis + shift) % 26 + basis)  # + shift!
+            else:
+                result += char
+        return result
+    except Exception as e:
+        print(f"Error in ceaser function: {e}")
+        return ""
 
 def vigenere(text: str, key: str) -> str:
-    result = ""
+    try:
+        result = ""
 
-    key = key.lower()
-    key_index = 0
+        key = key.lower()
+        key_index = 0
 
-    for char in text:
-        if char.isalpha():
-            key_char = key[key_index % len(key)]
-            shift = ord(key_char) - ord('a')
+        for char in text:
+            if char.isalpha():
+                key_char = key[key_index % len(key)]
+                shift = ord(key_char) - ord('a')
 
-            basis = ord('A') if char.isupper() else ord('a')
-            result += chr((ord(char) - basis + shift) % 26 + basis)
+                basis = ord('A') if char.isupper() else ord('a')
+                result += chr((ord(char) - basis + shift) % 26 + basis)
 
-            key_index += 1
-        else:
-            result += char
+                key_index += 1
+            else:
+                result += char
 
-    return result
+        return result
+    except Exception as e:
+        print(f"Error in vigenere function: {e}")
+        return ""
 
 def xor(text: str, key: str) -> str:
     text_bytes = text.encode('utf-8')
@@ -39,3 +46,4 @@ def xor(text: str, key: str) -> str:
         result.append(text_bytes[i] ^ key_bytes[i % len(key_bytes)])
 
     return result.hex()
+

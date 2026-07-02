@@ -166,3 +166,14 @@ async def handle_xor_encrypt(req: XorReq):
     )
 
     return resp
+
+@app.post("/xor/decrypt")
+async def handle_xor_decrypt(req: XorReq):
+    result = decrypt.xor(req.text, req.key)
+
+    resp = XorResp(
+        text=result,
+        req=req
+    )
+
+    return resp
