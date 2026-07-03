@@ -16,6 +16,7 @@
     --amber: #e8a33d;
     --cyan: #5fb3b3;
     --red: #d9736a;
+    --green: #7ac074;
   }
 
   * { box-sizing: border-box; }
@@ -74,10 +75,8 @@
   }
   .tab.active { color: var(--amber); border-color: var(--amber); }
 
-  .key-field { display: none; }
-  .key-field.visible { display: block; }
-  .shift-field { display: none; }
-  .shift-field.visible { display: block; }
+  .key-field, .shift-field, .lang-field { display: none; }
+  .key-field.visible, .shift-field.visible, .lang-field.visible { display: block; }
 
   button {
     margin-top: 20px;
@@ -123,6 +122,66 @@
   }
   .mode-toggle input[type="radio"] { display: none; }
   .mode-toggle input[type="radio"]:checked + label { color: var(--cyan); border-color: var(--cyan); }
+  .mode-toggle input[type="radio"]#mode-crack:checked + label { color: var(--green); border-color: var(--green); }
+
+  /* Crack-Ergebnis-Darstellung */
+  .crack-result { padding: 0; }
+  .crack-header {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .best-guess {
+    padding: 12px;
+    border: 1px solid var(--green);
+    border-radius: 3px;
+    margin-bottom: 16px;
+    background: rgba(122, 192, 116, 0.05);
+  }
+  .best-guess .meta {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+  .best-guess .meta .key-val { color: var(--green); }
+  .best-guess .plaintext {
+    color: var(--text);
+    font-size: 14px;
+    word-break: break-word;
+  }
+  .confidence {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .confidence.high { color: var(--green); }
+  .confidence.medium { color: var(--amber); }
+  .confidence.low { color: var(--red); }
+
+  .alternatives .alt-item {
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .alternatives .alt-item .alt-meta {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-dim);
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .alternatives .alt-item .alt-text {
+    color: var(--text-dim);
+    word-break: break-word;
+  }
 </style>
 </head>
 <body>
@@ -132,7 +191,7 @@
   <h1>cipher-tool</h1>
 
   <div class="tabs">
-    <div class="tab active" data-cipher="caeser">caesar</div>
+    <div class="tab active" data-cipher="caesar">caesar</div>
     <div class="tab" data-cipher="vigenere">vigenere</div>
     <div class="tab" data-cipher="xor">xor</div>
   </div>
@@ -143,6 +202,8 @@
     <label for="mode-encrypt">encrypt</label>
     <input type="radio" name="mode" id="mode-decrypt" value="decrypt">
     <label for="mode-decrypt">decrypt</label>
+    <input type="radio" name="mode" id="mode-crack" value="crack">
+    <label for="mode-crack">crack</label>
   </div>
 
   <label>text</label>
@@ -158,6 +219,14 @@
     <input type="text" id="keyInput" placeholder="z.B. KEY">
   </div>
 
+  <div class="lang-field" id="langField">
+    <label>sprache</label>
+    <select id="langSelect">
+      <option value="en">english</option>
+      <option value="de">deutsch</option>
+    </select>
+  </div>
+
   <button id="runBtn">ausführen</button>
 
   <label>ergebnis</label>
@@ -166,36 +235,135 @@
 </div>
 
 <script>
-  // Passe das ggf. an deine tatsächliche Server-URL an
   const BASE_URL = "http://127.0.0.1:8000";
 
-  let currentCipher = "caeser";
+  let currentCipher = "caesar";
 
   const tabs = document.querySelectorAll(".tab");
   const shiftField = document.getElementById("shiftField");
   const keyField = document.getElementById("keyField");
+  const langField = document.getElementById("langField");
   const output = document.getElementById("output");
   const runBtn = document.getElementById("runBtn");
+  const modeRadios = document.querySelectorAll('input[name="mode"]');
+
+  // Zeigt die passenden Input-Felder je nach Cipher UND Modus.
+  function updateVisibleFields() {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+
+    // Alle Felder zuerst verstecken
+    shiftField.classList.remove("visible");
+    keyField.classList.remove("visible");
+    langField.classList.remove("visible");
+
+    if (mode === "crack") {
+      // Bei crack: nur Sprache brauchen, kein Shift/Key
+      langField.classList.add("visible");
+      return;
+    }
+
+    // Bei encrypt/decrypt: cipher-abhängig
+    if (currentCipher === "caesar") {
+      shiftField.classList.add("visible");
+    } else {
+      keyField.classList.add("visible");
+    }
+  }
 
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
       tabs.forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
       currentCipher = tab.dataset.cipher;
-
-      if (currentCipher === "caeser") {
-        shiftField.classList.add("visible");
-        keyField.classList.remove("visible");
-      } else {
-        shiftField.classList.remove("visible");
-        keyField.classList.add("visible");
-      }
+      updateVisibleFields();
     });
   });
 
+  modeRadios.forEach(r => r.addEventListener("change", updateVisibleFields));
+
+  // Übersetzt das confidence-Level vom Backend in CSS-Klasse + Anzeigetext.
+  function formatConfidence(confidence) {
+    if (!confidence || !confidence.level) {
+      return { label: "unbekannt", cls: "medium" };
+    }
+    const levelToClass = { high: "high", medium: "medium", low: "low", unknown: "medium" };
+    const levelLabels = { high: "hoch", medium: "mittel", low: "niedrig", unknown: "unbekannt" };
+    const cls = levelToClass[confidence.level] ?? "medium";
+    let label = levelLabels[confidence.level] ?? confidence.level;
+    if (confidence.ratio !== null && confidence.ratio !== undefined) {
+      label += ` (ratio ${Number(confidence.ratio).toFixed(2)})`;
+    }
+    if (confidence.note) {
+      label += ` — ${confidence.note}`;
+    }
+    return { label, cls };
+  }
+
+  // Rendert das Crack-Ergebnis: Top-Guess prominent, danach 4 Alternativen.
+  function renderCrackResult(candidates, confidence) {
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      output.textContent = "keine kandidaten vom backend erhalten.";
+      output.className = "output error";
+      return;
+    }
+
+    // Erwartetes Format pro Kandidat: [shift, plaintext, score]
+    // Fallback: falls das Backend Objekte statt Tupel schickt, umbauen.
+    const normalized = candidates.map(c => {
+      if (Array.isArray(c)) {
+        return { shift: c[0], text: c[1], score: c[2] };
+      }
+      return { shift: c.shift ?? c.key, text: c.text ?? c.plaintext, score: c.score };
+    });
+
+    const best = normalized[0];
+    const conf = formatConfidence(confidence);
+
+    let html = '<div class="crack-result">';
+    html += '<div class="crack-header">bester kandidat</div>';
+    html += '<div class="best-guess">';
+    html += '<div class="meta">';
+    html += `<span>key/shift: <span class="key-val">${escapeHtml(String(best.shift))}</span></span>`;
+    html += `<span>χ² = ${Number(best.score).toFixed(2)}</span>`;
+    html += '</div>';
+    html += `<div class="plaintext">${escapeHtml(best.text)}</div>`;
+    html += `<div class="confidence ${conf.cls}">sicherheit: ${conf.label}</div>`;
+    html += '</div>';
+
+    const alts = normalized.slice(1, 5);
+    if (alts.length > 0) {
+      html += '<div class="crack-header">weitere kandidaten</div>';
+      html += '<div class="alternatives">';
+      for (const alt of alts) {
+        html += '<div class="alt-item">';
+        html += '<div class="alt-meta">';
+        html += `<span>key/shift: ${escapeHtml(String(alt.shift))}</span>`;
+        html += `<span>χ² = ${Number(alt.score).toFixed(2)}</span>`;
+        html += '</div>';
+        html += `<div class="alt-text">${escapeHtml(alt.text)}</div>`;
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+    output.innerHTML = html;
+    output.className = "output";
+  }
+
+  // Klein und ausreichend gegen versehentliches HTML im Klartext.
+  function escapeHtml(str) {
+    return String(str)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
   async function ausfuehren() {
     const text = document.getElementById("textInput").value;
-    const mode = document.querySelector('input[name="mode"]:checked').value; // "encrypt" oder "decrypt"
+    const mode = document.querySelector('input[name="mode"]:checked').value;
 
     if (!text.trim()) {
       output.textContent = "bitte erst text eingeben.";
@@ -203,12 +371,15 @@
       return;
     }
 
-    // Body je nach Cipher-Typ zusammenbauen
+    // Body je nach Modus + Cipher
     let body;
-    if (currentCipher === "caeser") {
+    if (mode === "crack") {
+      const lang = document.getElementById("langSelect").value;
+      body = { text: text, lang: lang };
+    } else if (currentCipher === "caesar") {
       const shift = parseInt(document.getElementById("shiftInput").value, 10);
       body = { text: text, shift: shift };
-    } else if (currentCipher === "vigenere" || currentCipher === "xor") {
+    } else {
       const key = document.getElementById("keyInput").value;
       if (!key.trim()) {
         output.textContent = "bitte einen key eingeben.";
@@ -237,12 +408,24 @@
 
       const daten = await response.json();
 
-      // Backend gibt { "text": "...", "req": {...} } zurück
+      if (mode === "crack") {
+        // Erwartet: { guesses: [...] } oder { candidates: [...] }
+        // Fallback: falls Backend direkt eine Liste liefert, auch akzeptieren
+        const candidates = daten.guesses ?? daten.candidates ?? (Array.isArray(daten) ? daten : null);
+        if (!candidates) {
+          output.textContent = "unerwartetes response-format vom backend. erwartet: { guesses: [...] }";
+          output.className = "output error";
+          return;
+        }
+        renderCrackResult(candidates, daten.confidence);
+        return;
+      }
+
+      // encrypt/decrypt: altes Verhalten bleibt
       const result = daten.text;
       output.textContent = result;
 
-      // Prüfe, ob das Ergebnis ein Error-Message ist (fängt mit "fehler:")
-      if (result.toLowerCase().startsWith("fehler:")) {
+      if (typeof result === "string" && result.toLowerCase().startsWith("fehler:")) {
         output.className = "output error";
       } else {
         output.className = "output";

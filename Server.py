@@ -9,6 +9,8 @@ import os
 from fastapi.middleware.cors import CORSMiddleware
 import encrypt
 import decrypt
+import crack
+import analysis
 
 class Town(BaseModel):
     latitude: float
@@ -37,6 +39,10 @@ class XorReq(BaseModel):
 class XorResp(BaseModel):
     text: str
     req: XorReq
+
+class CrackReq(BaseModel):
+    text: str
+    lang: str = "en"
 
 app = FastAPI()
 
@@ -111,7 +117,7 @@ async def get_repos():
         for repo in data
     ]
 
-@app.post("/caeser/decrypt")
+@app.post("/caesar/decrypt")
 async def handle_ceaser_decrypt(req: CeaserReq):
 
     result = decrypt.ceaser(req.text, req.shift)
@@ -134,7 +140,7 @@ async def handle_vigenere_decrypt(req: VigenereReq):
 
     return resp
 
-@app.post("/caeser/encrypt")
+@app.post("/caesar/encrypt")
 async def handle_ceaser_encrypt(req: CeaserReq):
     result = encrypt.ceaser(req.text, req.shift)
 
@@ -177,3 +183,25 @@ async def handle_xor_decrypt(req: XorReq):
     )
 
     return resp
+
+@app.post("/caesar/crack")
+async def handle_caesar_crack(req: CrackReq):
+    guesses = crack.caesar(req.text, req.lang)
+    confidence = analysis.confidence_score(guesses)
+
+    return {
+        "confidence":
+            {
+                "level": confidence['level'],
+                "ratio": confidence['ratio'],
+                "message": confidence['message']
+            },
+        "guesses": [
+            {
+                "shift": shift,
+                "text": text,
+                "score": score
+            }
+            for shift, text, score in guesses
+        ]
+    }

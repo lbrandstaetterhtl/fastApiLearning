@@ -1,6 +1,4 @@
-from unittest import result
 
-import encrypt
 def ceaser(text: str, shift: int) -> str:
     result = ""
 
